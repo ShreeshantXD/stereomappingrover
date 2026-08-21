@@ -57,7 +57,13 @@
 - This was updated in config from original 30mm
 
 ## Current Status: WORKING — depth maps confirmed good on textured scenes
-- DIRECTION DECISION (user): multi-frame stitching / pose estimation (Stage 9) SKIPPED for now. Project mode = single-shot scanning: one capture -> one PLY from one viewpoint. Single-frame accuracy gate (tape-measure check) attempted once but invalid setup (440mm < 658mm rig minimum; scene not wall-filled) - still unverified, redo at ~1000mm when desired.
+- DIRECTION DECISION (user): multi-frame stitching / pose estimation (Stage 9) SKIPPED for now. Project mode = single-shot scanning: one capture -> one PLY from one viewpoint. Nothing more to build for scan mode; workflow = dashboard CAPTURE -> pipeline --save-all -> output/pointcloud.ply.
+- Single-frame accuracy gate: STILL UNVERIFIED. Attempt 1 ran on room scene without tape value (invalid). Attempt 2: tape=440mm -> check FAIL +193% but TEST WAS INVALID: 440mm < 658mm rig minimum (impossible depth) AND scene was cluttered room not wall-filled (Z span 721-4999mm, plane tilt 84.5deg). Tool behaved correctly. REDO at ~1000mm: textured target filling frame, rig perpendicular, tape to LEFT lens front; sanity signal first = Depth Statistics Z mean within +-30mm of tape and small Z span.
+
+## Git
+- Repo: https://github.com/ShreeshantXD/stereomappingrover.git (branch main). Local Windows mirror initialized as git repo 2026-08-21, initial commit 36d6a66 on top of remote LICENSE commit 26c5ac0.
+- SECURITY: Pi SSH password was in CONTEXT.md - REDACTED to "(redacted for public repo)" before push. Real password NOT in repo (user knows it).
+- .gitignore excludes build/, captures/, output/, calibration/ - only source/scripts/config/docs are tracked.
 
 ### Depth-quality investigation findings
 - Capture #31 (smooth metal scale, <658mm): NO math bug. Verified Z_calc==Z_stored on sample grid; /16 scaling consistent; only legit max_depth clip fired. SGBM SATURATED at max disparity (raw +4068..4076 = 254-255px ceiling) over textureless/too-close region -> flat blob. Old depth colormap rendered near=blue AND invalid=blue -> looked contradictory vs disparity map. FIXED: near=red, far=blue, invalid=black.
@@ -79,6 +85,15 @@
 - Downscale-2 bonus: confidence HIGHER at half res (38% vs 23.5% above thr) - half-res matching more robust per block, not just faster.
 - Single-frame accuracy validation (pre-stitching gate): main.cpp prints Point Cloud Statistics every run (count, XYZ min/max/mean/std, PCA dominant-plane normal/tilt/RMS roughness, DEGENERATE flags: <1000 pts / collapsed stds / zero Z range). scripts/measure_ply.py (numpy-only, ascii PLY): stats | check <ply> <tape_mm> (median Z vs tape, error mm+%, PASS/MARGINAL/FAIL vs max(5mm,1%) tol) | plane | dist X1 Y1 Z1 X2 Y2 Z2 --r (3D distance between snapped neighbourhoods). Verified on synthetic 1000mm wall + 600mm baseline-distance cloud. NOTE: config downsample_voxel_mm is UNUSED by C++ generatePointCloud (only max_points striding) - PLY is faithful valid-pixel sample. Theory sigma_Z = Z^2*sigma_d/(f*B), f*B=167785: ~0.9mm @700mm, 1.8mm @1m, 4mm @1.5m (sigma_d=0.3px); calibration systematic ~1% dominates. Tape measured to LEFT lens front, rig perpendicular, textured target, never closer than 660mm (255px disparity ceiling; 330mm with --downscale 2).
 
+### TF-Luna 1D LiDAR integration — IN PROGRESS, no data yet
+- Hardware: Benewake TF-Luna (0.2-8m, 6-pin JST), purpose: (1) automated ground-truth for stereo accuracy check (replaces tape measure - point cameras+Luna at same wall, compare PLY median Z vs Luna distance), (2) rover obstacle ranging on textureless/glossy surfaces where stereo fails. Default protocol UART 115200, 9-byte frames: 0x54 0x59 distL distH signalL signalH tempL tempH checksum.
+- User-reported wiring (physical pin numbers): Luna RX -> Pi pin7 (GPIO4), Luna TX -> Pi pin29 (GPIO5), GND -> pin6, VCC -> pin2 (5V rail; TF-Luna accepts 5V or 3.3V), mystery "i2c enable" wire -> Pi pin14 (GPIO10). TX/RX orientation as described is CORRECT cross-connection IF GPIO4=TX/GPIO5=RX.
+- Pi 5 serial facts discovered: /dev/serial0 -> ttyAMA10 = GPIO14/15 header UART, console/getty OFF so port free. I2C bus has ONE device at 0x68 (RTC or IMU - NOT the Luna; Luna I2C would be 0x10). No USB-serial adapters.
+- `sudo dtoverlay uart2` runtime-loaded OK and created /dev/ttyAMA2 (NOTE: root-only perms crw------- root root, needs sudo to read; NOTE: runtime overlay is LOST ON REBOOT - persist with `echo "dtoverlay=uart2" | sudo tee -a /boot/firmware/config.txt` once sensor works).
+- STATUS: ZERO bytes received on both ttyAMA10 and ttyAMA2 at 115200 (sudo stty -F ... raw -echo then sudo timeout 3 od -A x -t x1 ...). Sensor silent.
+- NEXT DEBUG STEPS (in order): (1) `pinctrl get 4; pinctrl get 5; sudo dtoverlay -l` - verify uart2 actually claimed GPIO4/5 (Pi5 RP1 uart-to-pin mapping may differ from Pi4). (2) Physically SWAP the two signal wires (pin7<->pin29) and retry od - TX/RX mislabel is most common cause of silence. (3) Clarify mystery i2c-enable wire: bare TF-Luna has NO such pin (pads: 5V, 3.3V, SDA/TX, GND, RX/SCL, Signal) - read silkscreen labels; if sensor got strapped into I2C mode its UART stays silent. (4) Verify power (any warmth/voltage at Luna VCC-GND).
+- Once data flows: write scripts/tf_luna.py (open /dev/ttyAMA2 115200, parse 9-byte frames w/ checksum, print dist mm + signal strength), then a stereo-vs-luna cross-check (compare measure_ply.py median Z against Luna reading at same target).
+
 ### History
 1. **Calibration** ✅ DONE (18 valid pairs, --min-corners 14):
    - Stereo error: 1.16 px | Baseline: 77.86mm (vs 79mm measured lens-center) | f=2154.9px
@@ -96,6 +111,8 @@
 - For rover range 0.5-5m: set num_disparities=256 (min ~656mm) or 384 (min ~437mm) in stereo_config.yaml AND C++ defaults
 
 ## Known Bugs Fixed
+- main.cpp Point Cloud Statistics: cv::meanStdDev on Nx3 single-channel Mat returns ONE value (per-channel, not per-column) -> Y/Z printed mean=0 std=0. Fixed: meanStdDev per pts.col(a) loop.
+- OpenCV 4 removed old enum names: cv::PCA_DATA_AS_ROW -> cv::PCA::DATA_AS_ROW.
 - `inspect_env.py`: `eval()` can't run `import` on Python 3.13 → switched to `subprocess`
 - `inspect_env.py`: OpenCV module check `hasattr(cv2, 'core')` wrong → check specific functions
 - `stereo_live_view.py`: `global CAPTURE_DIR` SyntaxError on Python 3.13 → removed globals
