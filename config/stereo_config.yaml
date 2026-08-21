@@ -1,0 +1,103 @@
+# Stereo Mapping Configuration
+# Raspberry Pi 5 - Dual IMX708 CSI Camera Setup
+
+# Camera settings
+cameras:
+  left:
+    camera_id: 0          # Picamera2 index (detected as Num: 0)
+    rotation: 180         # IMX708 mounting rotation
+  right:
+    camera_id: 1          # Picamera2 index (detected as Num: 1)
+    rotation: 180
+
+# Capture resolution - start with 1536x864 for Pi5 4GB RAM
+capture:
+  width: 1536
+  height: 864
+  # Available modes for IMX708:
+  #   1536x864  @ ~120 FPS  (recommended for stereo)
+  #   2304x1296 @ ~56 FPS   (test if performance permits)
+  #   4608x2592 @ ~14 FPS   (too slow for stereo on Pi5 4GB)
+  format: RGB888
+
+# Synchronization note:
+# Two CSI cameras on Pi5 are NOT hardware-synchronized.
+# Capture is sequential (left then right, ~10-50ms gap).
+# For static scenes this is acceptable.
+# For moving scenes, this limitation must be acknowledged.
+sync:
+  mode: "sequential"       # "sequential" is only option without hardware sync
+  max_time_gap_ms: 100     # warn if capture gap exceeds this
+
+# Stereo geometry (initial guess from physical measurement)
+stereo:
+  baseline_mm: 85.0        # physical measurement, refined by calibration
+  # Do NOT hardcode this as the true baseline - calibration determines it
+
+# Calibration settings
+calibration:
+  board_type: "charuco"    # "charuco" or "checkerboard"
+  # ChArUco board parameters
+  charuco:
+    squares_x: 5           # number of squares in X direction
+    squares_y: 7           # number of squares in Y direction
+    square_size_mm: 28.0   # physical square size (measured from screen)
+    marker_size_mm: 20.5   # ArUco marker size within square
+    dictionary: "DICT_6X6_250"
+  # Checkerboard fallback
+  checkerboard:
+    corners_x: 5           # inner corners
+    corners_y: 7
+    square_size_mm: 28.0
+  # Calibration capture
+  num_pairs: 30            # target number of stereo pairs
+  min_pairs: 15            # minimum for acceptable calibration
+  output_file: "config/calibration/stereo_calib.yaml"
+
+# Stereo matching / disparity
+disparity:
+  algorithm: "sgbm"        # "sgbm" (StereoSGBM) or "bm" (StereoBM)
+  sgbm:
+    min_disparity: 0
+    num_disparities: 256   # must be divisible by 16; 256 => min depth ~65cm (f*B/256)
+    block_size: 7          # odd number, 5-21 typical
+    P1: 392                # 8*block_size^2 (grayscale); 0 would DISABLE smoothness
+    P2: 1568               # 32*block_size^2 (grayscale); must be > P1
+    disp12_max_diff: 1
+    uniqueness_ratio: 10
+    speckle_window_size: 100
+    speckle_range: 32
+    pre_filter_cap: 63
+    mode: "SGBM_3WAY"     # "SGBM" or "SGBM_3WAY"
+  # WLS filter for cleaner disparity (requires dnn if available)
+  wls_filter: true
+  wls_lambda: 8000.0
+  wls_sigma: 1.5
+
+# Depth computation
+depth:
+  min_depth_mm: 200        # ignore closer than 20cm (too noisy/unreliable)
+  max_depth_mm: 5000       # ignore further than 5m (low disparity precision)
+  invalid_value: 0         # value for invalid depth pixels
+  texture_min_gradient: 8.0 # mean Sobel magnitude below this -> invalid (lower to ~5 if too aggressive)
+
+# Point cloud generation
+pointcloud:
+  output_format: "ply"     # "ply" or "pcd"
+  downsample_voxel_mm: 5.0 # voxel downsampling for dense clouds
+  colorize: true           # use RGB color from left image
+  save_intensity: false    # save disparity as intensity channel
+  max_points: 500000       # cap to prevent memory issues on Pi5
+
+# Performance limits (Pi5 4GB)
+performance:
+  max_fps: 10              # cap processing rate
+  process_every_n: 1       # process every Nth frame (1 = all)
+  max_point_cloud_size: 500000
+  warn_ram_usage_mb: 3000  # warn if RAM usage exceeds this
+
+# Output paths
+paths:
+  captures_dir: "captures"
+  calibration_dir: "config/calibration"
+  output_dir: "output"

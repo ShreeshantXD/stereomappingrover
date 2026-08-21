@@ -1,0 +1,38 @@
+# Build artifacts
+build/
+*.o
+*.so
+*.a
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Captures (large binary files)
+captures/
+!captures/.gitkeep
+
+# Output
+output/
+!output/.gitkeep
+
+# Calibration intermediate data
+calibration/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.mypy_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
