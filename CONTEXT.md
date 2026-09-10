@@ -91,7 +91,8 @@
 - Pi 5 serial facts discovered: /dev/serial0 -> ttyAMA10 = GPIO14/15 header UART, console/getty OFF so port free. I2C bus has ONE device at 0x68 (RTC or IMU - NOT the Luna; Luna I2C would be 0x10). No USB-serial adapters.
 - `sudo dtoverlay uart2` runtime-loaded OK and created /dev/ttyAMA2 (NOTE: root-only perms crw------- root root, needs sudo to read; NOTE: runtime overlay is LOST ON REBOOT - persist with `echo "dtoverlay=uart2" | sudo tee -a /boot/firmware/config.txt` once sensor works).
 - STATUS: ZERO bytes received on both ttyAMA10 and ttyAMA2 at 115200 (sudo stty -F ... raw -echo then sudo timeout 3 od -A x -t x1 ...). Sensor silent.
-- NEXT DEBUG STEPS (in order): (1) `pinctrl get 4; pinctrl get 5; sudo dtoverlay -l` - verify uart2 actually claimed GPIO4/5 (Pi5 RP1 uart-to-pin mapping may differ from Pi4). (2) Physically SWAP the two signal wires (pin7<->pin29) and retry od - TX/RX mislabel is most common cause of silence. (3) Clarify mystery i2c-enable wire: bare TF-Luna has NO such pin (pads: 5V, 3.3V, SDA/TX, GND, RX/SCL, Signal) - read silkscreen labels; if sensor got strapped into I2C mode its UART stays silent. (4) Verify power (any warmth/voltage at Luna VCC-GND).
+- ACTUAL PINOUT (from user's module silkscreen, left->right): 1=+3.7V-5.2V, 2=RXD/SDA, 3=TXD/SCL, 4=GND, 5=I2C Enable, 6=Data Signal(PWM). Board DOES have I2C Enable pin (earlier assumption 'bare Luna has none' was wrong). I2C Enable HIGH = I2C mode (UART silent); LOW/floating = UART mode. Module has two optical openings front, mounting tabs both sides.
+- NEXT DEBUG STEPS (in order): (1) `pinctrl get 4; pinctrl get 5; sudo dtoverlay -l` - verify uart2 actually claimed GPIO4/5 (Pi5 RP1 uart-to-pin mapping may differ from Pi4; if mapped elsewhere, re-wire to those pins). (2) MOVE I2C Enable wire from Pi pin14 (GPIO10) to a GND pin (e.g. pin9) to hard-force UART mode. (3) Physically SWAP the two signal wires (pin7<->pin29) and retry od - TX/RX mislabel is most common cause of silence. (4) Verify power (voltage at Luna VCC-GND).
 - Once data flows: write scripts/tf_luna.py (open /dev/ttyAMA2 115200, parse 9-byte frames w/ checksum, print dist mm + signal strength), then a stereo-vs-luna cross-check (compare measure_ply.py median Z against Luna reading at same target).
 
 ### History
@@ -154,7 +155,7 @@ echo "Done: $(ls left/ | wc -l) pairs"
 
 ## Key Config Values (stereo_config.yaml)
 - Resolution: 1536x864
-- Square size: 28.0mm (screen-measured)
+- Square size: 28.0mm (screen-measured, NOT 30mm as in README)
 - Marker size: 20.5mm
 - Board: 5x7 ChArUco, DICT_6X6_250
 - SGBM: num_disparities=128, block_size=7, WLS filter enabled

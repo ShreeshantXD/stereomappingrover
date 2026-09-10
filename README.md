@@ -28,25 +28,22 @@ IMX708 Right ─┘
 ## Quick Start
 
 ```bash
-# 1. Install dependencies
-chmod +x setup_env.sh && ./setup_env.sh
-
-# 2. Verify both cameras work
+# 1. Verify both cameras work
 python3 scripts/camera_verify.py
 
-# 3. Capture calibration pairs (move target around, 30 pairs)
+# 2. Capture calibration pairs (move target around, 30 pairs)
 python3 scripts/calibrate_stereo.py capture --num-pairs 30
 
-# 4. Run calibration
+# 3. Run calibration
 python3 scripts/calibrate_stereo.py calibrate
 
-# 5. Validate calibration
+# 4. Validate calibration
 python3 scripts/calibrate_stereo.py validate
 
-# 6. Build C++ pipeline
+# 5. Build C++ pipeline
 chmod +x build.sh && ./build.sh
 
-# 7. Capture and process a stereo pair
+# 6. Capture and process a stereo pair
 python3 scripts/run_pipeline.py
 
 # Or process existing images:
@@ -103,13 +100,13 @@ Edit `config/stereo_config.yaml` for:
 
 ## Calibration Target
 
-Default: **ChArUco board** (5x7 squares, 30mm square size)
+Default: **ChArUco board** (5x7 squares, 28mm square size)
 
 You can print a ChArUco board using:
 ```python
 import cv2.aruco as aruco
 dictionary = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
-board = aruco.CharucoBoard((5, 7), 30.0, 22.0, dictionary)
+board = aruco.CharucoBoard((5, 7), 28.0, 20.5, dictionary)
 img = board.generateImage((1500, 2100))
 cv2.imwrite("charuco_target.png", img)
 ```
