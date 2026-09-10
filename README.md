@@ -130,10 +130,4 @@ Transfer `output/pointcloud.ply` to a PC and open with:
 3. **CPU-only**: No CUDA on Pi5. SGBM is the most practical algorithm.
 4. **Calibration required**: Do not use without running calibration first.
 
-## Future Work (Not Implemented Yet)
 
-- Visual odometry / SLAM
-- Persistent 3D mapping across rover movement
-- LiDAR fusion (sensor not yet identified)
-- ROS 2 integration
-- Real-time streaming
